@@ -1,0 +1,284 @@
+## PROGRAMACION CON SERIES TEMPORALES
+##paquetes, tseries, dynlm
+base=read_xlsx("base serie tiempo.xlsx")
+View(base)
+## Si la base tiene datos perdidos 
+## utilizar el metodo visto en actividad 2
+
+#Graficos de las series para examinar tendencias o patrones
+grafico3x3=matrix(c(1:6),nrow = 2,byrow = FALSE)
+grafico3x3
+x11()
+layout(grafico3x3)
+layout.show(6)
+pib=plot(base$rgdpna,xlab ="temporalidad",ylab="pib",type = "l")
+ch=plot(base$hc,xlab ="temporalidad",ylab="ch",type = "l")
+cf=plot(base$ck,xlab ="temporalidad",ylab="cf",type = "l")
+ingnacio=plot(base$rnna,xlab ="temporalidad",ylab="ingreso nacional",type = "l")
+dev.off()
+
+#Generar modelos de rezagos distribuidos (paquetes tseries y dynlm)
+# se toman solo una variable endogena y una exogena para generar modelos de rezagos distribuidos
+pib.ts=ts(base$rgdpna,start = c(1950,1),end = c(2019,1),frequency = 1)
+ch.ts=ts(base$hc,start = c(1950,1),end = c(2019,1),frequency = 1)
+cf.ts=ts(base$ck,start = c(1950,1),end = c(2019,1),frequency = 1)
+ingnacio.ts=ts(base$rnna,start = c(1950,1),end = c(2019,1),frequency = 1)
+modelo3=dynlm(pib.ts~L(pib.ts)+L(pib.ts,2)+L(pib.ts,3))
+summary(modelo3)
+##existira regresion espurea entre inf y unem?
+modelo4=lm(base$rgdpna~base$hc,data=base)
+summary(modelo4)
+
+## Metodo de suavizacion exponencial (paquete forecast)
+##se genera un vector cualquiera de ventas
+ventas<-c(125,132,155,135,152,147,140,154,153,177,179)
+#Definimos la variable "ventas"  en serie temporal
+ventas<-ts(ventas,start=1, frequency=1)
+ventas
+x11()
+plot(ventas)
+## se genera el pronostico de suavizacion, el valor alpha
+## es un valor de 0 a 1 siendo 1 donde mas se acerca a la serie original
+## siendo 0 donde mas se aleja de la serie original. Por tanto se puede cambiar el valor de alpha
+fit_ses<-ses(ventas,h=1, initial ="simple", alpha=0.87)
+fit_ses
+plot(fit_ses)
+
+## Metodo de diferencias
+## tomando la pib
+
+plot(pib.ts,type="l")
+## se utiliza el comando diff, donde se puede generar una cantidad de diferencias 
+## segun lo que se necesite
+difpib=diff(pib.ts,1)
+plot(difpib,type="l")
+
+#Metodo Filtro Hodrick-Presscot
+#tener en cuenta que el valor Lambda es 6.25 para series anuales, 1600 para series trimestrales
+#y 129600 para series mensuales
+#librerias mFilter, ggplot2, stats
+#tomando la base basephi
+pib.ts
+View(pib.ts)
+pibhp=hpfilter(pib.ts,6.25)
+names(pibhp)
+pibhp$cycle
+pibhp$trend
+x11()
+plot(pibhp)
+## Método de Logaritmos
+lnpib=log(pib.ts)
+plot(lnpib,type="l")
+
+#caminata aleatoria sin deriva
+grafico2x1=matrix(c(1:2),nrow = 2,byrow = FALSE)
+grafico2x1
+x11()
+layout(grafico2x1)
+layout.show(2)
+y=u=rnorm(100)
+for(t in 2:100){
+  y[t]=y[t-1]+u[t]
+}
+plot(1:length(y),y,xlab="t",ylab=expression(y[t]),type="l",ylim=c(-10,10),main="caminata aleatoria sin deriva")
+#caminata aleatoria con deriva
+y=u=rnorm(50)
+for(t in 2:50){
+  y[t]=0.3+y[t-1]+u[t]
+}
+plot(1:length(y),y,xlab="t",ylab=expression(y[t]),type="l",ylim=c(-5,50),main="caminata aleatoria con deriva")
+dev.off()
+
+
+## Ergodicidad, test de wald-wolfowitz.
+## Ttener en cuenta que el comando runs.test requiere de valores dicotomicos, por lo tanto
+#se hace un cambio en la generación aleatoria de los datos mediante la media
+## el resultado es un contraste con la tabla Normal, lo cual implica |Z|>1.96
+## donde si Ho: Hay ergodicidad, entonces P-valor>0.05
+## donde si Ha: No hay ergodicidad, entonces P-valor<0.05
+
+dataergo=data.frame(base$year,base$rgdpna)
+dataergo
+names(dataergo)=c("año","variable")
+View(dataergo)
+muestra=split(dataergo,sample(rep(1:2,35)))
+muestra
+bb1=(muestra[["1"]])
+bb1
+bb2=(muestra[["2"]])
+bb2
+p=c(bb1$variable,bb2$variable)
+re=ceiling(p)
+re
+#aqui se hace el cambio
+condicional =ifelse(re>=mean(re),1,0) 
+condicional
+condicional=factor(condicional)
+condicional
+runs.test(condicional)
+
+## EJERCICIO EN SERIE DE TIEMPO MODELACION ARMA Y ARIMA
+## UTILIZAR LA BASE DE DATOS DE PHILLIPS PARA LA REALIZACIÓN DLE MODELO
+## Paquetes tseries, dynlm
+## Examinando la raiz unitaria
+## Es de aclarar que B0 implica la tendencia de la serie
+modelo6=dynlm(pib.ts~0+L(pib.ts))
+modelo6
+##Prueba Dickey Fuller Aumentada (paquete tseries)
+x11()
+plot(pib.ts)
+adf.test(pib.ts)
+## Mejorando la estacionariedad (eliminado el problema de la raiz unitaria)
+difpib=diff(pib.ts)
+length(difpib)
+## Nueva prueba de ADF para la variable diferneciada
+adf.test(difpib)
+##PROCESO ARIMA
+## Análisis del correlograma
+grafico2x1=matrix(c(2:1),nrow = 2,byrow = FALSE)
+grafico2x1
+x11()
+layout(grafico2x1)
+layout.show(2)
+correlograma_parcial=pacf(pib.ts,lag.max =40,main="Correlograma parcial Pib")
+correlograma=acf(pib.ts,lag.max =40,main="Correlograma Pib")
+dev.off()
+##Modelo automatico del software (paquete forecast)
+modelox=auto.arima(pib.ts,seasonal = T,stepwise = T,approximation=T,)
+modelox
+x11()
+predict(modelox,n.ahead=8)
+plot(forecast(modelox))
+
+# Modelacion de una Serie ARIMA MANUAL
+mod_arima=arima(difpib,order = c(1,0,0))
+mod_arima
+# Para la serie que desde el comienzo ya fue diferenciada se puede obtener el intercepto
+mod_arima1=arima(difpib,order = c(2,0,1),include.mean = TRUE)
+mod_arima1
+#analisis
+summary(mod_arima1)
+# No olvidar que la instruccion coeftest es del paquete lmtest
+coeftest(mod_arima1)
+errorarima=residuals(mod_arima)
+x11()
+plot(errorarima)
+## Se intala paquete forecast para realizar analisis de los residuos en gráfico
+## El test de ruido blanco garantiza si el modelo arima es el adecuado
+checkresiduals(errorarima)
+Box.test(errorarima,type="Ljung-Box")
+predict(mod_arima,n.ahead=4)
+plot(forecast(mod_arima))
+## la cantidad de datos iniciales de la serie diferenciada es de 69
+## para sacar el pronostico real, hay que convertier la serie diferenciada en la serie original
+## sumar la serie anterior a la serie pronosticada
+## Para gráfico interactivo utilizar paquete dygraphs
+length(difpib)
+last_pib.ts=pib.ts[69]
+modeloar1=forecast(mod_arima1, 7, level = 95)
+modeloar1
+pred_mod_arima = modeloar1$mean
+pron_real = cumsum(pred_mod_arima) + last_pib.ts
+pron_real
+pron_real_ts =ts(pron_real, start = c(2020,1), frequency=1)
+ts.plot(pib.ts, pron_real_ts, lty = c(1,3), col = c(2,20))
+## Gráfica más interactiva en el pronóstico (paquete dygraphs)
+graf_inter = cbind(pib.ts,pron_real_ts)
+x11()
+dygraph(graf_inter)
+
+####
+####
+#MODELO VAR
+# Cargar paquetes necesarios
+library(tidyverse)
+library(vars)
+library(tseries)
+library(urca)
+library(lmtest)
+
+# Leer el archivo (ajusta el path si es necesario)
+datos <- read_xlsx("penn table.xlsx", sheet = "Data")
+View(datos)
+
+# Filtrar solo Colombia
+colombia <- datos %>% filter(country == "Colombia")
+
+
+pibcol=colombia$rgdpna
+x11()
+plot(pibcol, type="l")
+chcol=colombia$hc
+colombiab=data.frame(pibcol,chcol)
+ts_data <- ts(colombiab[, c("pibcol", "chcol")], start = min(colombia$year), frequency = 1)
+
+pib.ts=ts(pibcol, start = c(1950,1),end = c(2019,1), frequency = 1)
+adf.test(pib.ts)
+difpib=diff(pib.ts)
+plot(difpib)
+grafico2x1=matrix(c(2:1),nrow = 2,byrow = FALSE)
+grafico2x1
+x11()
+layout(grafico2x1)
+layout.show(2)
+correlograma_parcial=pacf(pib.ts,lag.max =40,main="Correlograma parcial Pib")
+correlograma=acf(pib.ts,lag.max =40,main="Correlograma Pib")
+#modelo arima
+mod_arima=arima(difpib,order = c(1,0,0))
+mod_arima
+predict(mod_arima,n.ahead=8)
+plot(forecast(mod_arima))
+
+
+
+
+
+
+
+
+
+
+chcol=colombia$hc
+colombiab=data.frame(pibcol,chcol)
+
+# Crear serie temporal multivariada
+ts_data <- ts(colombiab[, c("pibcol", "chcol")], start = min(colombia$year), frequency = 1)
+x11()
+pib=plot(colombia$rgdpna,xlab ="temporalidad",ylab="pib",type = "l")
+ch=plot(colombia$hc,xlab ="temporalidad",ylab="ch",type = "l")
+
+# Verificar estacionariedad con Dickey-Fuller
+adf.test(ts_data[, "pibcol"])
+adf.test(ts_data[, "chcol"])
+
+# Si no son estacionarias, diferenciarlas
+d_ts <- diff(ts_data)
+
+# Seleccionar número óptimo de rezagos
+VARselect(d_ts, lag.max = 5, type = "const")
+
+# Estimar modelo VAR (usa el rezago sugerido por el criterio de Schwarz, por ejemplo)
+modelo_var <- VAR(d_ts, p = 1, type = "const")
+modelo_var
+# Validación del modelo
+roots(modelo_var) #Estabilidad
+serial.test(modelo_var, lags.pt = 10, type = "PT.asymptotic")  # Correlation
+normality.test(modelo_var)  # Normalidad
+homovar=arch.test(modelo_var,lags.multi = 1) #Homocedasticidad
+homovar
+# Test de Granger
+causality(modelo_var, cause = "chcol")  # chcol → pibcol,XXX
+causality(modelo_var, cause = "pibcol")  # pibcol → chcol
+
+# Función de impulso-respuesta
+irf_model= irf(modelo_var, impulse = "chcol", response = "pibcol", n.ahead = 10, boot = TRUE)
+x11()
+plot(irf_model, ylab = "PIB", main = "Shock desde el CH")
+
+# Graficar ambas IRFs
+plot(irf(modelo_var, n.ahead = 10, boot = TRUE))
+
+## pronostico
+pronosticovar=predict(modelo_var, n.ahead = 10, ci=0.95)
+pronosticovar
+fanchart(pronosticovar)
